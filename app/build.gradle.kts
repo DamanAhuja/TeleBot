@@ -1,3 +1,4 @@
+import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -14,6 +15,18 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+    android {
+        defaultConfig {
+
+            val mapsApiKey: String =
+                project.findProperty("MAPS_API_KEY")?.toString()
+                    ?: error("MAPS_API_KEY not found in local.properties")
+
+            manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+        }
+    }
+
+
 
     buildTypes {
         release {
@@ -33,6 +46,29 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    val keystoreProperties = Properties()
+    val keystorePropertiesFile = rootProject.file("keystore.properties")
+
+    if (keystorePropertiesFile.exists()) {
+        keystoreProperties.load(keystorePropertiesFile.inputStream())
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file(keystoreProperties["storeFile"] as String)
+            storePassword = keystoreProperties["storePassword"] as String
+            keyAlias = keystoreProperties["keyAlias"] as String
+            keyPassword = keystoreProperties["keyPassword"] as String
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
 }
 
 dependencies {
@@ -41,4 +77,7 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.android.libraries.places:places:3.3.0")
 }

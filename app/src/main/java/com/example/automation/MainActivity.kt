@@ -5,20 +5,22 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import okhttp3.FormBody
-import okhttp3.OkHttpClient
-import okhttp3.Request
 
 class MainActivity : AppCompatActivity() {
+
+    private lateinit var rulesContainer: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 1️⃣ Request notification permission (Android 13+)
+        rulesContainer = findViewById(R.id.rulesContainer)
+
+        // Notification permission (Android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED
@@ -31,20 +33,30 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 2️⃣ Request location permission
+        // Location permission
         if (!hasLocationPermission()) {
             requestLocationPermission()
             return
         }
 
-        // 3️⃣ Start foreground service ONLY after permissions
         startForegroundTrackingService()
 
-        // 4️⃣ Test Telegram
-        //sendTelegramMessage()
+        findViewById<ImageButton>(R.id.btnRecipients).setOnClickListener {
+            startActivity(Intent(this, RecipientsActivity::class.java))
+        }
+
+        findViewById<Button>(R.id.btnCreateRule).setOnClickListener {
+            startActivity(Intent(this, CreateRuleActivity::class.java))
+        }
     }
 
-    // 🔹 Permission helpers
+    override fun onResume() {
+        super.onResume()
+        loadRules()
+    }
+
+    // ───────────────── Permissions ─────────────────
+
     private fun hasLocationPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             this,
@@ -63,13 +75,6 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    // 🔹 Foreground service starter
-    private fun startForegroundTrackingService() {
-        val intent = Intent(this, LocationForegroundService::class.java)
-        startForegroundService(intent)
-    }
-
-    // 🔹 Handle ALL permissions in ONE place
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -80,45 +85,114 @@ class MainActivity : AppCompatActivity() {
         if (grantResults.isEmpty()) return
 
         when (requestCode) {
-            2001 -> { // Notification permission
-                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    recreate() // restart activity to continue flow
-                }
-            }
-
-            1001 -> { // Location permission
-                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    startForegroundTrackingService()
-                }
-            }
+            2001 -> if (grantResults[0] == PackageManager.PERMISSION_GRANTED) recreate()
+            1001 -> if (grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                startForegroundTrackingService()
         }
     }
 
-    // 🔹 Telegram test
-    private fun sendTelegramMessage() {
-        android.util.Log.d("TELEGRAM_TEST", "sendTelegramMessage() called")
+    // ───────────────── Foreground Service ─────────────────
 
-        val client = OkHttpClient()
+    private fun startForegroundTrackingService() {
+        val intent = Intent(this, LocationForegroundService::class.java)
+        startForegroundService(intent)
+    }
 
-        val body = FormBody.Builder()
-            .add("chat_id", TelegramConfig.CHAT_ID)
-            .add("text", "Hello from Android 🚀 Telegram works!")
-            .build()
+    // ───────────────── Rules UI ─────────────────
 
-        val request = Request.Builder()
-            .url("https://api.telegram.org/bot${TelegramConfig.BOT_TOKEN}/sendMessage")
-            .post(body)
-            .build()
+    private fun loadRules() {
+        rulesContainer.removeAllViews()
 
-        client.newCall(request).enqueue(object : okhttp3.Callback {
-            override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
-                android.util.Log.e("TELEGRAM_TEST", "Failed", e)
+        val rules = RuleStorage.loadRules(this)
+
+        if (rules.isEmpty()) {
+            val tv = TextView(this)
+            tv.text = "No rules created yet"
+            tv.setTextColor(0xFF888888.toInt())
+            tv.setPadding(16, 16, 16, 16)
+            rulesContainer.addView(tv)
+            return
+        }
+
+        for (rule in rules) {
+            val tv = TextView(this)
+
+            tv.text =
+                "📍 ${"%.4f".format(rule.latitude)}, ${"%.4f".format(rule.longitude)}\n" +
+                        "📏 Radius: ${rule.radiusMeters} m\n" +
+                        "✉️ ${rule.message}\n" +
+                        if (rule.enabled) "✅ Enabled" else "⛔ Disabled"
+
+            tv.textSize = 15f
+            tv.setPadding(16, 16, 16, 16)
+
+            tv.setOnClickListener {
+                showEditRuleDialog(rule)
             }
 
-            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
-                android.util.Log.d("TELEGRAM_TEST", "Success: ${response.code}")
-                response.close()
+            rulesContainer.addView(tv)
+        }
+    }
+
+    // ───────────────── Edit Rule Popup ─────────────────
+
+    private fun showEditRuleDialog(rule: Rule) {
+
+        val view = layoutInflater.inflate(R.layout.dialog_edit_rule, null)
+
+        val switchEnabled = view.findViewById<Switch>(R.id.switchEnabled)
+        val etMessage = view.findViewById<EditText>(R.id.etMessage)
+        val seekRadius = view.findViewById<SeekBar>(R.id.seekRadius)
+        val rgRepeat = view.findViewById<RadioGroup>(R.id.rgRepeat)
+
+        switchEnabled.isChecked = rule.enabled
+        etMessage.setText(rule.message)
+        seekRadius.progress = rule.radiusMeters
+
+        when (rule.repeatType) {
+            RepeatType.ONCE -> rgRepeat.check(R.id.rbOnce)
+            RepeatType.EVERY_TIME -> rgRepeat.check(R.id.rbEveryTime)
+            RepeatType.DAILY -> rgRepeat.check(R.id.rbDaily)
+        }
+
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setView(view)
+            .create()
+
+        view.findViewById<Button>(R.id.btnSave).setOnClickListener {
+
+            val newMessage = etMessage.text.toString().trim()
+            if (newMessage.isEmpty()) {
+                Toast.makeText(this, "Message cannot be empty", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
-        })
+
+            val updatedRule = rule.copy(
+                enabled = switchEnabled.isChecked,
+                message = newMessage,
+                radiusMeters = seekRadius.progress,
+                repeatType = when (rgRepeat.checkedRadioButtonId) {
+                    R.id.rbEveryTime -> RepeatType.EVERY_TIME
+                    R.id.rbDaily -> RepeatType.DAILY
+                    else -> RepeatType.ONCE
+                }
+            )
+
+            RuleStorage.saveRule(this, updatedRule)
+            dialog.dismiss()
+            loadRules()
+        }
+
+        view.findViewById<Button>(R.id.btnDelete).setOnClickListener {
+            getSharedPreferences("rules", MODE_PRIVATE)
+                .edit()
+                .remove("rule_${rule.id}")
+                .apply()
+
+            dialog.dismiss()
+            loadRules()
+        }
+
+        dialog.show()
     }
 }

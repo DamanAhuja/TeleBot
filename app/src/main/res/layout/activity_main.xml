@@ -1,14 +1,59 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical"
-    android:gravity="center">
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
 
-    <TextView
-        android:layout_width="wrap_content"
+    <!-- Top bar -->
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/tvTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Rules"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:layout_centerVertical="true"/>
+
+        <ImageButton
+            android:id="@+id/btnRecipients"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Recipients"
+            android:src="@android:drawable/ic_menu_myplaces"/>
+    </RelativeLayout>
+
+    <!-- Rules list container -->
+    <LinearLayout
+        android:id="@+id/rulesContainer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/tvNoRules"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="No rules created yet"
+            android:textColor="#888888"/>
+    </LinearLayout>
+
+    <!-- Create Rule button -->
+    <Button
+        android:id="@+id/btnCreateRule"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Telegram Automation App"
-        android:textSize="18sp" />
+        android:text="Create Rule"
+        android:layout_margin="16dp"/>
 
 </LinearLayout>
